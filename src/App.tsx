@@ -2,7 +2,7 @@ import { StatisticalChart, type BenchmarkData } from './components';
 
 // Sample benchmark data for MRR (Monthly Recurring Revenue)
 const sampleData: BenchmarkData = {
-  min: 45.5,      // Q1 - 1.5 * IQR
+  min: 45.2,      // Q1 - 1.5 * IQR
   q1: 65.2,       // 25th percentile
   median: 82.7,   // 50th percentile
   q3: 98.4,       // 75th percentile

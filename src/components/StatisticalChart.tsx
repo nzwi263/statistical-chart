@@ -25,6 +25,90 @@ interface StatisticalChartProps {
   badgeText?: string;
 }
 
+interface LabelConfig {
+  id: string;
+  label: string;
+  value: number;
+  x: number;
+  y: number;
+  priority: number; // 3 = highest (Median), 2 = medium (Min/Max), 1 = lowest (Q1/Q3)
+}
+
+const TOOLTIP_WIDTH = 80;
+const TOOLTIP_HEIGHT = 40;
+
+/**
+ * Custom hook to calculate label positions with collision detection and priority-based filtering.
+ * Uses a hybrid approach: staggered y-offsets + collision detection + priority filtering.
+ */
+const useLabelPositions = (
+  data: BenchmarkData,
+  xScale: d3.ScaleLinear<number, number>,
+  boxY: number,
+  whiskerY: number,
+  boxHeight: number
+): LabelConfig[] => {
+  return useMemo(() => {
+    // Step 1: Calculate initial positions with staggered y-offsets
+    // Note: Tooltip renders at (y - 45) to (y - 5), so we need sufficient offset
+    const labels: LabelConfig[] = [
+      { id: 'min', label: 'Minimum', value: data.min, x: xScale(data.min), y: whiskerY - 60, priority: 2 },
+      { id: 'q1', label: 'Q1', value: data.q1, x: xScale(data.q1), y: boxY - 50, priority: 1 },
+      { id: 'median', label: 'Median', value: data.median, x: xScale(data.median), y: boxY + boxHeight + 50, priority: 3 },
+      { id: 'q3', label: 'Q3', value: data.q3, x: xScale(data.q3), y: boxY - 50, priority: 1 },
+      { id: 'max', label: 'Maximum', value: data.max, x: xScale(data.max), y: whiskerY - 60, priority: 2 },
+    ];
+
+    // Step 2: Detect overlaps and resolve using priority-based filtering
+    const resolveOverlaps = (items: LabelConfig[]): LabelConfig[] => {
+      const sortedByPriority = [...items].sort((a, b) => b.priority - a.priority);
+      const kept: LabelConfig[] = [];
+
+      for (const item of sortedByPriority) {
+        const itemBox = {
+          left: item.x - TOOLTIP_WIDTH / 2,
+          right: item.x + TOOLTIP_WIDTH / 2,
+          top: item.y - TOOLTIP_HEIGHT,
+          bottom: item.y
+        };
+
+        let hasOverlap = false;
+        for (const keptItem of kept) {
+          const keptBox = {
+            left: keptItem.x - TOOLTIP_WIDTH / 2,
+            right: keptItem.x + TOOLTIP_WIDTH / 2,
+            top: keptItem.y - TOOLTIP_HEIGHT,
+            bottom: keptItem.y
+          };
+
+          // Check for rectangle intersection
+          const overlaps = !(
+            itemBox.right <= keptBox.left ||
+            itemBox.left >= keptBox.right ||
+            itemBox.bottom <= keptBox.top ||
+            itemBox.top >= keptBox.bottom
+          );
+
+          if (overlaps) {
+            hasOverlap = true;
+            break;
+          }
+        }
+
+        // Only keep if no overlap or if it's the highest priority item
+        if (!hasOverlap || item.priority === 3) {
+          kept.push(item);
+        }
+      }
+
+      // Sort back by x position for consistent rendering
+      return kept.sort((a, b) => a.x - b.x);
+    };
+
+    return resolveOverlaps(labels);
+  }, [data, xScale, boxY, whiskerY, boxHeight]);
+};
+
 // The Probability Density Function (PDF) for a Normal Distribution
 const getNormalY = (x: number, mean: number, stdDev: number): number => {
   const exponent = -Math.pow(x - mean, 2) / (2 * Math.pow(stdDev, 2));
@@ -246,6 +330,9 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
   const boxWidth = xScale(data.q3) - xScale(data.q1);
   const whiskerY = boxY + boxHeight / 2;
 
+  // Calculate label positions with collision detection and priority-based filtering
+  const labelPositions = useLabelPositions(data, xScale, boxY, whiskerY, boxHeight);
+
   // Standard deviation markers (shared between both regions)
   const stdMarkers = useMemo(() => {
     const markers = [];
@@ -387,37 +474,16 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
             />
           </motion.g>
 
-          {/* Tooltips — positioned at key statistical points in top region */}
-          <Tooltip
-            label="Minimum"
-            value={`${data.min.toFixed(2)}`}
-            x={xScale(data.min)}
-            y={whiskerY - 15}
-          />
-          <Tooltip
-            label="Q1"
-            value={`${data.q1.toFixed(2)}`}
-            x={xScale(data.q1)}
-            y={boxY}
-          />
-          <Tooltip
-            label="Median"
-            value={`${data.median.toFixed(2)}`}
-            x={xScale(data.median)}
-            y={boxY}
-          />
-          <Tooltip
-            label="Q3"
-            value={`${data.q3.toFixed(2)}`}
-            x={xScale(data.q3)}
-            y={boxY}
-          />
-          <Tooltip
-            label="Maximum"
-            value={`${data.max.toFixed(2)}`}
-            x={xScale(data.max)}
-            y={whiskerY - 15}
-          />
+          {/* Tooltips — positioned at key statistical points in top region with collision detection */}
+          {labelPositions.map((pos) => (
+            <Tooltip
+              key={pos.id}
+              label={pos.label}
+              value={`${pos.value.toFixed(2)}`}
+              x={pos.x}
+              y={pos.y}
+            />
+          ))}
 
           {/* User Value Marker ("You") — top region portion - RENDERED LAST FOR TOPMOST LAYER */}
           {data.userValue !== undefined && (
