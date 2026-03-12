@@ -11,6 +11,7 @@ interface BenchmarkData {
   mean: number;
   standardDev: number;
   userValue?: number;
+  distributionValues?: number[];
 }
 
 type BadgeType = 'live' | 'top' | 'bottom';
@@ -113,6 +114,19 @@ const useLabelPositions = (
 const getNormalY = (x: number, mean: number, stdDev: number): number => {
   const exponent = -Math.pow(x - mean, 2) / (2 * Math.pow(stdDev, 2));
   return (1 / (stdDev * Math.sqrt(2 * Math.PI))) * Math.pow(Math.E, exponent);
+};
+
+/**
+ * Kernel Density Estimation (KDE) functions
+ */
+const kernelEpanechnikov = (k: number) => {
+  return (v: number) => Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+};
+
+const kernelDensityEstimator = (kernel: (v: number) => number, X: number[]) => {
+  return (V: number[]) => {
+    return X.map(x => [x, d3.mean(V, v => kernel(x - v)) || 0]);
+  };
 };
 
 interface LiveIndicatorProps {
@@ -269,32 +283,72 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
   const topRegionHeight = (innerHeight - regionGap) / 2;
   const bottomRegionHeight = (innerHeight - regionGap) / 2;
 
-  // Shared X scale
-  const xScale = useMemo(() => {
-    const range = 4 * data.standardDev;
-    return d3.scaleLinear()
-      .domain([data.mean - range, data.mean + range])
+  // Shared X scale - uses data range (min to max) with padding to allow distribution to touch x-axis
+  const { extendedDomain, xScale } = useMemo(() => {
+    const range = data.max - data.min;
+    const padding = range * 0.15;
+    const domain = [data.min - padding, data.max + padding];
+    
+    const scale = d3.scaleLinear()
+      .domain(domain)
       .range([0, innerWidth]);
-  }, [innerWidth, data.mean, data.standardDev]);
+      
+    return { extendedDomain: domain, xScale: scale };
+  }, [innerWidth, data.min, data.max]);
 
-  // Y scale for the bell curve — maps to the bottom region only
+  // KDE calculation
+  const kdeData = useMemo(() => {
+    const values = data.distributionValues || [];
+    if (values.length === 0) return [];
+
+    // Silverman's rule of thumb for bandwidth
+    // Handle cases with 0 or 1 elements, or zero variance
+    const stdDev = d3.deviation(values) || 0.1;
+    const bandwidth = Math.max(0.1, 0.9 * stdDev * Math.pow(values.length, -0.2));
+
+    // Generate ticks across the extended domain
+    const ticks = d3.ticks(extendedDomain[0], extendedDomain[1], 100);
+    const kde = kernelDensityEstimator(kernelEpanechnikov(bandwidth), ticks);
+    return kde(values);
+  }, [data.distributionValues, extendedDomain]);
+
+  // Y scale for the distribution curve — maps to the bottom region only
   const yScale = useMemo(() => {
-    const maxY = getNormalY(data.mean, data.mean, data.standardDev);
+    let maxY: number;
+    if (kdeData.length > 0) {
+      maxY = d3.max(kdeData, d => d[1]) || 0;
+    } else {
+      // Fallback to normal distribution peak
+      maxY = getNormalY(data.mean, data.mean, data.standardDev);
+    }
+    
+    // Ensure maxY is at least a small positive value to avoid scale issues
+    maxY = Math.max(maxY, 0.0001);
+    
     return d3.scaleLinear()
       .domain([0, maxY * 1.1])
       .range([bottomRegionHeight, 0]);
-  }, [bottomRegionHeight, data.mean, data.standardDev]);
+  }, [bottomRegionHeight, kdeData, data.mean, data.standardDev]);
 
-  // Generate the Bell Curve path
-  const bellCurvePath = useMemo(() => {
-    const points = d3.range(
-      data.mean - 4 * data.standardDev,
-      data.mean + 4 * data.standardDev + 0.01,
-      0.05
-    ).map(x => ({
-      x: xScale(x),
-      y: yScale(getNormalY(x, data.mean, data.standardDev))
-    }));
+  // Generate the Distribution Curve path
+  const distributionCurvePath = useMemo(() => {
+    let points: { x: number; y: number }[];
+
+    if (kdeData.length > 0) {
+      points = kdeData.map(d => ({
+        x: xScale(d[0]),
+        y: yScale(d[1])
+      }));
+    } else {
+      points = d3.range(
+        extendedDomain[0],
+        extendedDomain[1] + 0.01,
+        (extendedDomain[1] - extendedDomain[0]) / 100
+      ).map(x => ({
+        x: xScale(x),
+        y: yScale(getNormalY(x, data.mean, data.standardDev))
+      }));
+    }
 
     const lineGenerator = d3.line<{ x: number; y: number }>()
       .x(d => d.x)
@@ -302,18 +356,27 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
       .curve(d3.curveBasis);
 
     return lineGenerator(points) || '';
-  }, [xScale, yScale, data.mean, data.standardDev]);
+  }, [xScale, yScale, kdeData, data.mean, data.standardDev, extendedDomain]);
 
-  // Generate the Bell Curve area path
-  const bellCurveAreaPath = useMemo(() => {
-    const points = d3.range(
-      data.mean - 4 * data.standardDev,
-      data.mean + 4 * data.standardDev + 0.01,
-      0.05
-    ).map(x => ({
-      x: xScale(x),
-      y: yScale(getNormalY(x, data.mean, data.standardDev))
-    }));
+  // Generate the Distribution Curve area path
+  const distributionCurveAreaPath = useMemo(() => {
+    let points: { x: number; y: number }[];
+
+    if (kdeData.length > 0) {
+      points = kdeData.map(d => ({
+        x: xScale(d[0]),
+        y: yScale(d[1])
+      }));
+    } else {
+      points = d3.range(
+        extendedDomain[0],
+        extendedDomain[1] + 0.01,
+        (extendedDomain[1] - extendedDomain[0]) / 100
+      ).map(x => ({
+        x: xScale(x),
+        y: yScale(getNormalY(x, data.mean, data.standardDev))
+      }));
+    }
 
     const areaGenerator = d3.area<{ x: number; y: number }>()
       .x(d => d.x)
@@ -322,7 +385,7 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
       .curve(d3.curveBasis);
 
     return areaGenerator(points) || '';
-  }, [xScale, yScale, bottomRegionHeight, data.mean, data.standardDev]);
+  }, [xScale, yScale, bottomRegionHeight, kdeData, data.mean, data.standardDev, extendedDomain]);
 
   // Box plot positions — centered vertically in the top region
   const boxHeight = 50;
@@ -333,23 +396,27 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
   // Calculate label positions with collision detection and priority-based filtering
   const labelPositions = useLabelPositions(data, xScale, boxY, whiskerY, boxHeight);
 
-  // Standard deviation markers (shared between both regions)
+  // Data value markers - evenly spaced tick marks from min to max
   const stdMarkers = useMemo(() => {
     const markers = [];
-    for (let i = -3; i <= 3; i++) {
-      const x = data.mean + i * data.standardDev;
+    const numTicks = 5; // Number of tick marks
+    const range = data.max - data.min;
+    const step = range / (numTicks - 1);
+    
+    for (let i = 0; i < numTicks; i++) {
+      const value = data.min + i * step;
       markers.push({
-        x: xScale(x),
-        label: i === 0 ? 'μ' : `${i}σ`
+        x: xScale(value),
+        label: value.toFixed(1)
       });
     }
     return markers;
-  }, [xScale, data.mean, data.standardDev]);
+  }, [xScale, data.min, data.max]);
 
   // Create initial flat path for bell curve animation (in bottom region)
   const initialPath = useMemo(() => {
-    return `M ${xScale(data.mean - 4 * data.standardDev)} ${bottomRegionHeight} L ${xScale(data.mean + 4 * data.standardDev)} ${bottomRegionHeight}`;
-  }, [xScale, bottomRegionHeight, data.mean, data.standardDev]);
+    return `M ${xScale(extendedDomain[0])} ${bottomRegionHeight} L ${xScale(extendedDomain[1])} ${bottomRegionHeight}`;
+  }, [xScale, bottomRegionHeight, extendedDomain]);
 
   // Y offset for the bottom region group
   const bottomRegionY = margin.top + topRegionHeight + regionGap;
@@ -518,19 +585,19 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
             stdMarkers={stdMarkers}
           />
 
-          {/* Bell Curve Area */}
+          {/* Distribution Curve Area */}
           <motion.path
             initial={{ d: initialPath, opacity: 0 }}
-            animate={{ d: bellCurveAreaPath, opacity: 1 }}
+            animate={{ d: distributionCurveAreaPath, opacity: 1 }}
             transition={{ duration: 1, ease: "easeOut" }}
             fill="url(#bellCurveGradient)"
             className="transition-all duration-500"
           />
 
-          {/* Bell Curve Line */}
+          {/* Distribution Curve Line */}
           <motion.path
             initial={{ d: initialPath, opacity: 0 }}
-            animate={{ d: bellCurvePath, opacity: 1 }}
+            animate={{ d: distributionCurvePath, opacity: 1 }}
             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
             className="stroke-blue-500 stroke-2 fill-none"
           />
