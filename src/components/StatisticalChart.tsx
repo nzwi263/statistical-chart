@@ -407,7 +407,7 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
       const value = data.min + i * step;
       markers.push({
         x: xScale(value),
-        label: value.toFixed(1)
+        label: String(Math.round(value))
       });
     }
     return markers;
@@ -546,7 +546,7 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
             <Tooltip
               key={pos.id}
               label={pos.label}
-              value={`${pos.value.toFixed(2)}`}
+              value={`${Math.round(pos.value)}`}
               x={pos.x}
               y={pos.y}
             />
@@ -632,7 +632,7 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
                   textAnchor="middle"
                   opacity={0.9}
                 >
-                  {data.userValue.toFixed(2)}
+                  {Math.round(data.userValue)}
                 </text>
               </g>
             </g>
