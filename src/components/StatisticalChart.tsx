@@ -541,18 +541,7 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
             />
           </motion.g>
 
-          {/* Tooltips — positioned at key statistical points in top region with collision detection */}
-          {labelPositions.map((pos) => (
-            <Tooltip
-              key={pos.id}
-              label={pos.label}
-              value={`${Math.round(pos.value)}`}
-              x={pos.x}
-              y={pos.y}
-            />
-          ))}
-
-          {/* User Value Marker ("You") — top region portion - RENDERED LAST FOR TOPMOST LAYER */}
+          {/* User Value Marker ("You") — top region portion - RENDERED FIRST TO BE BELOW TOOLTIPS */}
           {data.userValue !== undefined && (
             <g transform={`translate(${xScale(data.userValue)}, 0)`}>
               <line
@@ -563,6 +552,17 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
               />
             </g>
           )}
+
+          {/* Tooltips — positioned at key statistical points in top region with collision detection */}
+          {labelPositions.map((pos) => (
+            <Tooltip
+              key={pos.id}
+              label={pos.label}
+              value={`${Math.round(pos.value)}`}
+              x={pos.x}
+              y={pos.y}
+            />
+          ))}
         </g>
 
         {/* ═══════════════════════════════════════════════════════════
