@@ -5,7 +5,7 @@ const sampleData: BenchmarkData = {
   min: 1.97,      // Q1 - 1.5 * IQR
   q1: 9.64,       // 25th percentile
   median: 25.25,   // 50th percentile
-  q3: 53.94,       // 75th percentile
+  q3: 30.94,       // 75th percentile
   max: 53.94,     // Q3 + 1.5 * IQR
   mean: 29.00,     // Center of the bell curve
   standardDev: 15.2,  // For calculating the curve height

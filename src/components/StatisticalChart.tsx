@@ -53,11 +53,11 @@ const useLabelPositions = (
     // Step 1: Calculate initial positions with staggered y-offsets
     // Note: Tooltip renders at (y - 45) to (y - 5), so we need sufficient offset
     const labels: LabelConfig[] = [
-      { id: 'min', label: 'Minimum', value: data.min, x: xScale(data.min), y: whiskerY - 60, priority: 2 },
-      { id: 'q1', label: 'Q1', value: data.q1, x: xScale(data.q1), y: boxY - 50, priority: 1 },
+      { id: 'min', label: 'Minimum', value: data.min, x: xScale(data.min), y: whiskerY - 30, priority: 2 },
+      { id: 'q1', label: 'Q1', value: data.q1, x: xScale(data.q1), y: boxY - 10, priority: 1 },
       { id: 'median', label: 'Median', value: data.median, x: xScale(data.median), y: boxY + boxHeight + 50, priority: 3 },
-      { id: 'q3', label: 'Q3', value: data.q3, x: xScale(data.q3), y: boxY - 50, priority: 1 },
-      { id: 'max', label: 'Maximum', value: data.max, x: xScale(data.max), y: whiskerY - 60, priority: 2 },
+      { id: 'q3', label: 'Q3', value: data.q3, x: xScale(data.q3), y: boxY - 10, priority: 1 },
+      { id: 'max', label: 'Maximum', value: data.max, x: xScale(data.max), y: whiskerY - 30, priority: 2 },
     ];
 
     // Step 2: Detect overlaps and resolve using priority-based filtering
