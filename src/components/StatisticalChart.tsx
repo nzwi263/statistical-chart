@@ -561,11 +561,6 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
                 className="stroke-red-500 stroke-2"
                 strokeDasharray="6 4"
               />
-              <circle
-                cx={0} cy={10}
-                r={6}
-                className="fill-red-500"
-              />
             </g>
           )}
         </g>
