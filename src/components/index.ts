@@ -9,4 +9,5 @@ export interface BenchmarkData {
   mean: number;
   standardDev: number;
   userValue?: number;
+  distributionValues?: number[];
 }
