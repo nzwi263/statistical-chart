@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import * as d3 from 'd3';
 import { motion } from 'framer-motion';
+import youMarker from '../assets/you_marker.svg';
 
 interface BenchmarkData {
   min: number;
@@ -606,29 +607,15 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
                 className="stroke-red-500 stroke-2"
                 strokeDasharray="6 4"
               />
-              {/* "You" label badge in the bottom region */}
+              {/* "You" marker image in the bottom region */}
               <g transform={`translate(0, ${bottomRegionHeight * 0.3})`}>
-                <rect
-                  x={-35} y={-22}
-                  width={70} height={44}
-                  rx={6}
-                  className="fill-red-500"
+                <image
+                  href={youMarker}
+                  x={-20.5}
+                  y={-20.5}
+                  width={41}
+                  height={41}
                 />
-                <text
-                  x={0} y={-4}
-                  className="text-sm font-bold fill-white"
-                  textAnchor="middle"
-                >
-                  You
-                </text>
-                <text
-                  x={0} y={14}
-                  className="text-xs font-medium fill-white"
-                  textAnchor="middle"
-                  opacity={0.9}
-                >
-                  {Math.round(data.userValue)}
-                </text>
               </g>
             </g>
           )}
