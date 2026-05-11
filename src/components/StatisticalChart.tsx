@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import { motion } from 'framer-motion';
 import youMarker from '../assets/you_marker.svg';
@@ -54,11 +54,10 @@ const useLabelPositions = (
     // Step 1: Calculate initial positions with staggered y-offsets
     // Note: Tooltip renders at (y - 45) to (y - 5), so we need sufficient offset
     const labels: LabelConfig[] = [
-      { id: 'min', label: 'Minimum', value: data.min, x: xScale(data.min), y: whiskerY - 30, priority: 2 },
+      { id: 'min', label: 'Min', value: data.min, x: xScale(data.min), y: whiskerY - 30, priority: 2 },
       { id: 'q1', label: 'Q1', value: data.q1, x: xScale(data.q1), y: boxY - 10, priority: 1 },
-      { id: 'median', label: 'Median', value: data.median, x: xScale(data.median), y: boxY + boxHeight + 50, priority: 3 },
       { id: 'q3', label: 'Q3', value: data.q3, x: xScale(data.q3), y: boxY - 10, priority: 1 },
-      { id: 'max', label: 'Maximum', value: data.max, x: xScale(data.max), y: whiskerY - 30, priority: 2 },
+      { id: 'max', label: 'Max', value: data.max, x: xScale(data.max), y: whiskerY - 30, priority: 2 },
     ];
 
     // Step 2: Detect overlaps and resolve using priority-based filtering
@@ -422,6 +421,39 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
   // Y offset for the bottom region group
   const bottomRegionY = margin.top + topRegionHeight + regionGap;
 
+  // Hover state for the "You" star marker tooltip
+  const [isYouHovered, setIsYouHovered] = useState(false);
+
+  // Compute the y position on the distribution curve at the user's value.
+  // This is used to place the "You"/star marker so it sits on the curve.
+  const userCurveY = useMemo(() => {
+    if (data.userValue === undefined) return null;
+
+    let densityAtUser: number;
+    if (kdeData.length > 0) {
+      // Linearly interpolate the KDE density at userValue
+      const uv = data.userValue;
+      // Find bracketing points
+      let i = 0;
+      while (i < kdeData.length - 1 && kdeData[i + 1][0] < uv) i++;
+
+      if (uv <= kdeData[0][0]) {
+        densityAtUser = kdeData[0][1];
+      } else if (uv >= kdeData[kdeData.length - 1][0]) {
+        densityAtUser = kdeData[kdeData.length - 1][1];
+      } else {
+        const [x0, y0] = kdeData[i];
+        const [x1, y1] = kdeData[i + 1];
+        const t = (uv - x0) / (x1 - x0);
+        densityAtUser = y0 + t * (y1 - y0);
+      }
+    } else {
+      densityAtUser = getNormalY(data.userValue, data.mean, data.standardDev);
+    }
+
+    return yScale(densityAtUser);
+  }, [data.userValue, data.mean, data.standardDev, kdeData, yScale]);
+
   return (
     <div className="relative p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
       <div className="mb-4">
@@ -607,15 +639,35 @@ export const StatisticalChart: React.FC<StatisticalChartProps> = ({
                 className="stroke-red-500 stroke-2"
                 strokeDasharray="6 4"
               />
-              {/* "You" marker image in the bottom region */}
-              <g transform={`translate(0, ${bottomRegionHeight * 0.3})`}>
+              {/* "You" marker image positioned where the distribution curve meets the userValue line */}
+              <g transform={`translate(0, ${userCurveY ?? bottomRegionHeight * 0.3})`}>
                 <image
                   href={youMarker}
                   x={-20.5}
                   y={-20.5}
                   width={41}
                   height={41}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => setIsYouHovered(true)}
+                  onMouseLeave={() => setIsYouHovered(false)}
                 />
+                {isYouHovered && (
+                  <g transform="translate(0, -30)" style={{ pointerEvents: 'none' }}>
+                    <foreignObject x={-50} y={-40} width={100} height={40}>
+                      <div
+                        className="bg-slate-800 text-white px-2 py-1 rounded shadow-lg text-center"
+                        style={{
+                          fontFamily: 'Geist, sans-serif',
+                          fontSize: '12px',
+                          lineHeight: '16px',
+                        }}
+                      >
+                        <div style={{ fontWeight: 500 }}>You</div>
+                        <div style={{ color: '#cbd5e1' }}>{Math.round(data.userValue!)}</div>
+                      </div>
+                    </foreignObject>
+                  </g>
+                )}
               </g>
             </g>
           )}
